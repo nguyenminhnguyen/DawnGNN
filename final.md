@@ -135,3 +135,133 @@
 - **Mô hình ngôn ngữ:** Thử RoBERTa/ALBERT/DistilBERT/Sentence-BERT; hoặc LLM tinh chỉnh riêng cho tài liệu API.
 - **Học đồ thị:** Thử Jumping Knowledge, tự giám sát, hoặc GNN mạnh hơn; thêm cơ chế robustness chống đối kháng.
 - **Phân tích động:** Áp dụng forced execution để tăng coverage; kết hợp provenance graphs cho APT.
+
+# 11. Giải thích dễ hiểu cho người mới bắt đầu
+Hãy tưởng tượng bạn xem nhật ký hành động của một chương trình. Nhật ký đó liệt kê tuần tự các API Windows mà chương trình gọi (mở file, sửa registry, gửi mạng...).  
+
+DawnGNN làm 3 việc quan trọng:
+
+1. **Đổi danh sách thành đồ thị**  
+  Mỗi API là một nút; cạnh có hướng nối API A sang API B nếu B xuất hiện ngay sau A. Như vậy ta thấy được “dòng chảy” thay vì chỉ chuỗi dài.
+2. **Thêm ý nghĩa (ngữ nghĩa) cho mỗi nút**  
+  Thay vì chỉ tên API (ví dụ `CreateFile`), DawnGNN lấy mô tả chức năng chính thức từ trang Microsoft (ví dụ: “Creates or opens a file or I/O device...”). Đoạn mô tả này được đưa vào BERT để biến thành một vector số (embedding) đại diện ý nghĩa.
+3. **Học mẫu hành vi với GNN (GAT)**  
+  GAT nhìn vào một nút và các láng giềng của nó trong đồ thị, tính mức độ “quan trọng” (attention). Những chuỗi chuyển tiếp đáng ngờ (tạo file → sửa registry → kết nối mạng) sẽ nổi bật hơn. Sau đó gộp toàn bộ nút thành một vector chung và phân loại: mã độc hay lành.
+
+**Quy trình khi áp dụng:**
+- Chạy file trong sandbox để thu chuỗi API.
+- Xây đồ thị + gắn embedding đã chuẩn bị.
+- Cho vào GAT → nhận kết quả phân loại.
+
+**Tại sao hiệu quả hơn dùng chuỗi thô?**
+- Tên API ngắn, dễ mơ hồ; mô tả dài chứa ngữ cảnh thật sự.
+- Đồ thị giữ được quan hệ lân cận (ai trước ai sau) rõ ràng hơn chuỗi phẳng.
+- Attention giúp tập trung vào các mẫu hành vi nguy hiểm thay vì coi mọi bước như nhau.
+
+**Ví dụ trực quan (ASCII):**
+```
+CreateFile -> WriteFile -> RegSetValue -> InternetConnect
+|________ nhóm thao tác file/ghi -> thay đổi hệ thống -> kết nối ra ngoài
+```
+
+Nếu thêm ngữ nghĩa, mô hình hiểu “CreateFile + WriteFile” = thao tác I/O, “RegSetValue” = thay đổi hệ thống, “InternetConnect” = truyền thông; kết hợp lại thành mẫu lan truyền/thiết lập kênh.
+
+**Tóm lại:**
+- Dữ liệu: chuỗi API + mô tả chức năng.
+- Chuyển đổi: chuỗi → đồ thị + embedding ngữ nghĩa.
+- Mô hình: GAT học quan hệ + ý nghĩa.
+- Đầu ra: Nhãn malware / benign.
+
+**Điểm nhớ nhanh:**
+- Thêm ngữ nghĩa = tăng phân biệt.
+- Đồ thị = biểu diễn cấu trúc.
+- Attention = lọc hành vi quan trọng.
+
+# 12. Giải thích thuật ngữ (Glossary)
+Mục này giải thích ngắn gọn các thuật ngữ quan trọng cho người mới bắt đầu, không cần nền tảng AI sâu.
+
+- **API (Application Programming Interface):** Tập hợp hàm/hệ thống mà chương trình gọi để tương tác với hệ điều hành (mở file, đọc registry...). Mỗi lần gọi là một "dấu vết" hành vi.
+- **API Call Sequence (Chuỗi gọi API):** Danh sách tuần tự các API được chương trình gọi trong quá trình chạy. Ví dụ: `CreateFile → WriteFile → RegSetValue → InternetConnect`.
+- **Sandbox (Hộp cát):** Môi trường cách ly an toàn để chạy mã nghi ngờ, ghi lại hành vi mà không ảnh hưởng hệ thống thật.
+- **Embedding:** Biểu diễn một thực thể (API, từ ngữ) thành vector số để mô hình xử lý. Giống như gán toạ độ cho khái niệm.
+- **BERT:** Mô hình ngôn ngữ học ngữ cảnh hai chiều của văn bản. Ở đây dùng để suy ra ý nghĩa từ mô tả chức năng API.
+- **MLM (Masked Language Model):** Nhiệm vụ trong đó một số từ bị che `[MASK]` và mô hình đoán lại; giúp học quan hệ ngữ cảnh.
+- **Graph (Đồ thị):** Tập nút (nodes) và cạnh (edges). Nút = API; cạnh = quan hệ kế tiếp giữa hai API trong chuỗi.
+- **Directed Edge (Cạnh có hướng):** Cạnh có chiều A → B (A xảy ra trước B). Giúp giữ thứ tự logic.
+- **GNN (Graph Neural Network):** Mô hình học trên đồ thị bằng cách truyền và tổng hợp thông tin giữa các nút.
+- **Message Passing:** Quá trình mỗi nút nhận thông tin từ láng giềng và cập nhật biểu diễn mình.
+- **GAT (Graph Attention Network):** Loại GNN dùng cơ chế attention để gán trọng số khác nhau cho từng láng giềng quan trọng.
+- **Attention:** Cách mô hình tập trung mạnh hơn vào phần "quan trọng" thay vì đối xử đều.
+- **GCN / GIN:** Hai biến thể GNN khác; GCN dùng chuẩn hoá ma trận kề, GIN dùng MLP mạnh để tổng hợp thông tin.
+- **One-hot Encoding:** Mã hoá một thực thể thành vector với đúng một vị trí = 1, còn lại = 0. Mất ngữ nghĩa liên hệ.
+- **Word2Vec:** Kỹ thuật học embedding dựa trên tần suất/đồng xuất hiện; không bắt được ngữ cảnh sâu như BERT.
+- **MLP (Multilayer Perceptron):** Mạng thần kinh nhiều lớp fully-connected dùng ở cuối để phân loại.
+- **Classification (Phân loại):** Dự đoán nhãn đầu ra (malware hay benign).
+- **Precision / Recall / TNR / Accuracy / F1:** Các thước đo đánh giá. Precision = đúng trong số dự đoán malware; Recall = bắt được bao nhiêu malware thật; TNR = đúng trong số benign; Accuracy = tỷ lệ đúng tổng thể; F1 = hài hoà giữa Precision & Recall.
+- **Imbalanced Dataset (Tập dữ liệu mất cân bằng):** Khi một lớp (ví dụ malware) nhiều hơn lớp kia rất nhiều → khó học lớp hiếm.
+- **Adversarial Attack (Tấn công đối kháng):** Chiến lược tinh chỉnh đầu vào để đánh lừa mô hình phân loại sai.
+- **Forced Execution:** Kỹ thuật ép mã độc đi vào các nhánh thực thi tiềm năng để lộ hành vi.
+- **Provenance Graph:** Đồ thị nguồn gốc luồng dữ liệu/hành động giúp phân tích APT phức tạp.
+
+# 13. Flow hoạt động (Chi tiết tuần tự)
+Sơ đồ chữ (ASCII) mô tả pipeline từ dữ liệu thô đến dự đoán:
+```
+[Chạy exe trong Sandbox]
+     |
+     v
+    (Thu chuỗi API)
+     |
+     v
+ [Xây Đồ Thị API]
+  Nodes: API unique
+  Edges: hướng theo thứ tự
+     |
+     +-----------------------------+
+     |                             |
+     v                             v
+ (Crawl tài liệu API)           (Làm sạch mô tả)
+     |                             |
+     +-------------[Corpus mô tả]--+
+         |
+         v
+       [Huấn luyện / Fine-tune BERT (MLM)]
+         |
+         v
+     (Sinh API Embeddings từ mô tả)
+         |
+     +-------------+--------------+
+     |                            |
+     v                            v
+ (Gán embedding vào nút)      (Chuẩn bị batch đồ thị)
+     |
+     v
+    [GAT Message Passing nhiều lớp]
+     |
+     v
+      (Graph Embedding)
+     |
+     v
+     [MLP Phân loại]
+     |
+     v
+   => Kết quả: Malware / Benign
+```
+
+Chuỗi hoạt động rút gọn:
+1. Thu thập hành vi runtime.
+2. Chuyển chuỗi thành đồ thị.
+3. Lấy và mã hoá mô tả API bằng BERT.
+4. Gán embedding vào nút đồ thị.
+5. GAT học quan hệ + ngữ nghĩa.
+6. MLP phân loại nhãn.
+
+Lý do mỗi bước tồn tại:
+- Đồ thị: giữ cấu trúc tuần tự tốt hơn chuỗi phẳng.
+- BERT: thêm chiều ngữ nghĩa, hạn chế mù context.
+- GAT: làm nổi bật quan hệ hành vi quan trọng (các chuỗi nghi vấn).
+- MLP cuối: đơn giản, đủ cho quyết định nhị phân.
+
+Điểm mở rộng dễ áp dụng:
+- Thêm thông tin tham số API vào embedding.
+- Dùng self-supervised pretext tasks trên đồ thị (mask node / edge prediction).
+- Áp dụng cơ chế cảnh báo sớm (early exit) với ngưỡng độ tin cậy.
